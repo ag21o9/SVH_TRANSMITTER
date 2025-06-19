@@ -12,9 +12,10 @@ import {
   TextStyle,
   TouchableOpacity,
   View,
-  ViewStyle,
+  ViewStyle
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import TransmissionPage from './TransmissionPage';
 
 // Types
 interface IpPortPair {
@@ -69,8 +70,8 @@ const IpPortPairComponent: React.FC<IpPortPairProps> = ({
       <View style={ipPortStyles.header}>
         <Text style={ipPortStyles.title}>Server {index + 1}</Text>
         {canRemove && (
-          <TouchableOpacity 
-            style={ipPortStyles.removeButton} 
+          <TouchableOpacity
+            style={ipPortStyles.removeButton}
             onPress={() => onRemove(pair.id)}
             activeOpacity={0.7}
           >
@@ -184,7 +185,7 @@ function buildLoginPacket(input: any): string {
     input.latitude || '31.589618',
     input.longitude || '75.875231'
   ];
-  
+
   const payloadWithoutChecksum = fields.join(',');
   const checksum = calculateChecksum(payloadWithoutChecksum);
   return `${payloadWithoutChecksum}*${checksum}`;
@@ -231,7 +232,7 @@ class HTTPConnectionManager {
 
     } catch (error) {
       console.error('🚨 Error sending packet:', error);
-      
+
       onResponse({
         id: packetId,
         timestamp,
@@ -244,7 +245,7 @@ class HTTPConnectionManager {
     }
   }
 
-  startTransmission(serverConfigs: {ip: string, port: string, id: string}[], deviceConfig: any, onResponse: (response: PacketResponse) => void) {
+  startTransmission(serverConfigs: { ip: string, port: string, id: string }[], deviceConfig: any, onResponse: (response: PacketResponse) => void) {
     console.log('🚀 Starting HTTP transmission to', serverConfigs.length, 'servers');
 
     // Send initial login packets
@@ -296,6 +297,9 @@ const DeviceConfigPage: React.FC = () => {
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [packetResponses, setPacketResponses] = useState<PacketResponse[]>([]);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [showResponsesPage, setShowResponsesPage] = useState(false);
+  const [showTransmissionPage, setShowTransmissionPage] = useState(false);
+
 
   const addIpPortPair = useCallback(() => {
     const newPair: IpPortPair = {
@@ -340,7 +344,7 @@ const DeviceConfigPage: React.FC = () => {
       Alert.alert('Validation Error', 'Please select a backend');
       return false;
     }
-    
+
     const emptyPairs = config.ipPortPairs.filter(pair => !pair.ip.trim() || !pair.port.trim());
     if (emptyPairs.length > 0) {
       Alert.alert('Validation Error', 'Please fill all IP and Port fields');
@@ -384,53 +388,15 @@ const DeviceConfigPage: React.FC = () => {
   }, []);
 
   const handleStartTransmission = useCallback(() => {
-    console.log('🚀 Starting HTTP transmission');
-    
     if (!validateForm()) {
       return;
     }
-
-    try {
-      setIsTransmitting(true);
-      setPacketResponses([]); // Clear previous responses
-
-      const deviceConfig = {
-        vendorId: config.vendorId?.trim() || 'VNDR',
-        firmwareVersion: config.firmwareVersion?.trim() || 'FIRMWAREVER1.0',
-        deviceImei: config.deviceImei?.trim() || '',
-        vehicleNumber: config.vehicleNumber?.trim() || '',
-        networkProvider: config.networkProvider?.toUpperCase() || 'AIRTEL',
-        latitude: config.useGpsCoordinates ? '31.589618' : (config.latitude?.trim() || '31.589618'),
-        longitude: config.useGpsCoordinates ? '75.875231' : (config.longitude?.trim() || '75.875231')
-      };
-
-      const validPairs = config.ipPortPairs.filter(pair => 
-        pair.ip?.trim() && pair.port?.trim()
-      );
-
-      const serverConfigs = validPairs.map((pair, index) => ({
-        ip: pair.ip.trim(),
-        port: pair.port.trim(),
-        id: `server_${index + 1}`
-      }));
-
-      httpManager.startTransmission(serverConfigs, deviceConfig, handlePacketResponse);
-
-      Alert.alert(
-        '✅ Transmission Started',
-        `📡 Sending packets to ${validPairs.length} server(s)\n\n📊 View responses below`
-      );
-
-    } catch (error) {
-      console.error('🚨 Error starting transmission:', error);
-      setIsTransmitting(false);
-      Alert.alert('Error', `Failed to start transmission: ${error}`);
-    }
-  }, [config, httpManager, validateForm, handlePacketResponse]);
+    setShowTransmissionPage(true);
+  }, [validateForm]);
 
   const handleStopTransmission = useCallback(() => {
     console.log('🛑 Stopping transmission');
-    
+
     try {
       httpManager.stopTransmission();
       setIsTransmitting(false);
@@ -477,18 +443,28 @@ const DeviceConfigPage: React.FC = () => {
     setPacketResponses([]);
   }, []);
 
+  // If transmission page is to be shown, render it
+  if (showTransmissionPage) {
+    return (
+      <TransmissionPage
+        config={config}
+        onBack={() => setShowTransmissionPage(false)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#1976D2" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Icon name="settings" size={28} color="#fff" />
           <Text style={styles.headerTitle}>Device Setup</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.resetButton} 
+        <TouchableOpacity
+          style={styles.resetButton}
           onPress={handleReset}
           activeOpacity={0.8}
         >
@@ -496,8 +472,8 @@ const DeviceConfigPage: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -530,8 +506,8 @@ const DeviceConfigPage: React.FC = () => {
               <Icon name="router" size={22} color="#1976D2" />
               <Text style={styles.cardTitle}>Server Configuration</Text>
             </View>
-            <TouchableOpacity 
-              style={styles.addButton} 
+            <TouchableOpacity
+              style={styles.addButton}
               onPress={addIpPortPair}
               activeOpacity={0.8}
             >
@@ -559,7 +535,7 @@ const DeviceConfigPage: React.FC = () => {
             <Icon name="smartphone" size={22} color="#1976D2" />
             <Text style={styles.cardTitle}>Device Information</Text>
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Device IMEI *</Text>
             <TextInput
@@ -606,7 +582,7 @@ const DeviceConfigPage: React.FC = () => {
             <View style={styles.pickerWrapper}>
               <Picker
                 selectedValue={config.networkProvider}
-                onValueChange={(value: 'Airtel' | 'Vodafone' | 'BSNL' | '') => 
+                onValueChange={(value: 'Airtel' | 'Vodafone' | 'BSNL' | '') =>
                   updateConfig('networkProvider', value)
                 }
                 style={styles.picker}
@@ -640,13 +616,13 @@ const DeviceConfigPage: React.FC = () => {
             <Icon name="location-on" size={22} color="#1976D2" />
             <Text style={styles.cardTitle}>GPS Configuration</Text>
           </View>
-          
+
           <View style={styles.switchContainer}>
             <View style={styles.switchInfo}>
               <Text style={styles.switchLabel}>Use default GPS coordinates</Text>
               <Text style={styles.switchDescription}>
-                {config.useGpsCoordinates 
-                  ? 'Using: 31.589618, 75.875231' 
+                {config.useGpsCoordinates
+                  ? 'Using: 31.589618, 75.875231'
                   : 'Manual coordinates entered'
                 }
               </Text>
@@ -709,7 +685,7 @@ const DeviceConfigPage: React.FC = () => {
               <Icon name="clear-all" size={20} color="#666" />
             </TouchableOpacity>
           </View>
-          <ScrollView 
+          <ScrollView
             ref={scrollViewRef}
             style={styles.responsesScroll}
             showsVerticalScrollIndicator={true}
@@ -746,18 +722,18 @@ const DeviceConfigPage: React.FC = () => {
 
       {/* Bottom Action Bar */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
-            styles.actionButton, 
+            styles.actionButton,
             isTransmitting ? styles.stopButton : styles.transmitButton
-          ]} 
+          ]}
           onPress={isTransmitting ? handleStopTransmission : handleStartTransmission}
           activeOpacity={0.9}
         >
-          <Icon 
-            name={isTransmitting ? "stop" : "send"} 
-            size={20} 
-            color="#fff" 
+          <Icon
+            name={isTransmitting ? "stop" : "send"}
+            size={20}
+            color="#fff"
           />
           <Text style={styles.transmitButtonText}>
             {isTransmitting ? "Stop" : "Start"} Transmission
@@ -1014,17 +990,18 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E8F5E8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#4CAF50',
+    maxWidth: 80,
   },
   addButtonText: {
     color: '#4CAF50',
     fontWeight: '600',
-    marginLeft: 6,
-    fontSize: 14,
+    marginLeft: 3,
+    fontSize: 12,
   },
   bottomBar: {
     flexDirection: 'row',
