@@ -1,24 +1,20 @@
-import React, { useState, useCallback } from 'react';
+import { Picker } from '@react-native-picker/picker';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  Alert,
+  SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Switch,
-  Alert,
-  ViewStyle,
+  Text,
+  TextInput,
   TextStyle,
-  StatusBar,
-  SafeAreaView,
+  TouchableOpacity,
+  View,
+  ViewStyle,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { NativeModules } from 'react-native';
-
-// Import TCP Socket
-import TcpSocket from 'react-native-tcp-socket';
 
 // Types
 interface IpPortPair {
@@ -40,6 +36,16 @@ interface DeviceConfig {
   longitude: string;
 }
 
+interface PacketResponse {
+  id: string;
+  timestamp: string;
+  packet: string;
+  host: string;
+  port: string;
+  response: string;
+  status: 'success' | 'error';
+}
+
 // IpPortPair Component
 interface IpPortPairProps {
   pair: IpPortPair;
@@ -50,7 +56,6 @@ interface IpPortPairProps {
   canRemove: boolean;
 }
 
-// Fix the IpPortPair Component
 const IpPortPairComponent: React.FC<IpPortPairProps> = ({
   pair,
   index,
@@ -78,10 +83,10 @@ const IpPortPairComponent: React.FC<IpPortPairProps> = ({
           <Text style={ipPortStyles.inputLabel}>IP Address</Text>
           <TextInput
             style={ipPortStyles.input}
-            placeholder="192.168.1.1"
+            placeholder="34.225.227.181"
             value={pair.ip}
-            onChangeText={(value) => onIpChange(pair.id, value)} // Fixed: Pass pair.id and value
-            keyboardType="default" // Changed from "numeric" to "default" for IP addresses
+            onChangeText={(value) => onIpChange(pair.id, value)}
+            keyboardType="default"
             placeholderTextColor="#999"
             autoCapitalize="none"
             autoCorrect={false}
@@ -91,9 +96,9 @@ const IpPortPairComponent: React.FC<IpPortPairProps> = ({
           <Text style={ipPortStyles.inputLabel}>Port</Text>
           <TextInput
             style={ipPortStyles.input}
-            placeholder="8080"
+            placeholder="5001"
             value={pair.port}
-            onChangeText={(value) => onPortChange(pair.id, value)} // Fixed: Pass pair.id and value
+            onChangeText={(value) => onPortChange(pair.id, value)}
             keyboardType="numeric"
             placeholderTextColor="#999"
             autoCapitalize="none"
@@ -105,9 +110,8 @@ const IpPortPairComponent: React.FC<IpPortPairProps> = ({
   );
 };
 
-// Add PVT Packet Generation Functions
+// Packet functions
 function calculateChecksum(sentence: string): string {
-  // XOR all characters after '$' and before '*'
   let checksum = 0;
   for (let i = 1; i < sentence.length; i++) {
     checksum ^= sentence.charCodeAt(i);
@@ -115,58 +119,54 @@ function calculateChecksum(sentence: string): string {
   return checksum.toString(16).toUpperCase().padStart(2, '0');
 }
 
-function buildPvtPacket(input: any, packetType: string = 'NR', alertId: string = '1'): string {
+function buildPvtPacket(input: any): string {
   const now = new Date();
-
   const pad = (num: number, size: number) => num.toString().padStart(size, '0');
   const dateStr = `${pad(now.getDate(), 2)}${pad(now.getMonth() + 1, 2)}${now.getFullYear()}`;
   const timeStr = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}${pad(now.getSeconds(), 2)}`;
-
-  const latitude = input.latitude || '00.000000';
-  const longitude = input.longitude || '00.000000';
 
   const fields = [
     '$PVT',
     input.vendorId || 'VNDR',
     input.firmwareVersion || 'FIRMWAREVER1.0',
-    packetType,                   // NR, EPB, etc.
-    alertId,                      // Alert ID
-    'L',                          // Packet status: L = Live
+    'NR',
+    '1',
+    'L',
     input.deviceImei,
     (input.vehicleNumber || '').replace(/[^A-Z0-9]/gi, '').padStart(16, '0'),
-    '1',                          // GNSS Fix: 1 = fix
-    dateStr,                      // DDMMYYYY
-    timeStr,                      // HHMMSS
-    latitude,
+    '1',
+    dateStr,
+    timeStr,
+    input.latitude || '31.589618',
     'N',
-    longitude,
+    input.longitude || '75.875231',
     'E',
-    '0',                          // Speed (km/h)
-    '117.58',                     // Heading (degrees)
-    '39',                         // No. of satellites
-    '286.7',                      // Altitude (m)
-    '0.42',                       // PDOP
-    '0.43',                       // HDOP
+    '0',
+    '117.58',
+    '39',
+    '286.7',
+    '0.42',
+    '0.43',
     input.networkProvider || 'AIRTEL',
-    '1',                          // Ignition
-    '1',                          // Main Power
-    '12.2',                       // Main Input Voltage
-    '4.1',                        // Internal Battery Voltage
-    '0',                          // Tamper
-    'C',                          // Door status (Closed)
-    '12',                         // GSM signal strength (0–31)
-    '404',                        // MCC
-    '53',                         // MNC
-    '16C7',                       // LAC
-    'E4C2',                       // Cell ID
-    '2138', '700000', '29',       // NMR 1
-    '2137', '700000', '21',       // NMR 2
-    '2136', '700000', '21',       // NMR 3
-    '968A', '70000', '19',        // NMR 4
-    '0000', '0000', '00',         // Placeholder
-    '0',                          // Analog Input
-    '492894',                     // Frame number
-    '00AC'                        // Placeholder checksum (will be replaced)
+    '0',
+    '1',
+    '12.2',
+    '4.1',
+    '0',
+    'C',
+    '12',
+    '404',
+    '53',
+    '16C7',
+    'E4C2',
+    '2138', '700000', '29',
+    '2137', '700000', '21',
+    '2136', '700000', '21',
+    '968A', '70000', '19',
+    '0000', '0000', '00',
+    '0',
+    '492894',
+    '00AC'
   ];
 
   const payloadWithoutChecksum = fields.join(',');
@@ -174,7 +174,6 @@ function buildPvtPacket(input: any, packetType: string = 'NR', alertId: string =
   return `${payloadWithoutChecksum}*${checksum}`;
 }
 
-// Build Login Packet
 function buildLoginPacket(input: any): string {
   const fields = [
     '$LGN',
@@ -182,9 +181,8 @@ function buildLoginPacket(input: any): string {
     input.deviceImei,
     input.firmwareVersion || 'FIRMWAREVER1.0',
     'AIS140',
-    input.latitude || '30.101455',
-    input.longitude || '78.289948',
-    'DDE3220E*'
+    input.latitude || '31.589618',
+    input.longitude || '75.875231'
   ];
   
   const payloadWithoutChecksum = fields.join(',');
@@ -192,232 +190,112 @@ function buildLoginPacket(input: any): string {
   return `${payloadWithoutChecksum}*${checksum}`;
 }
 
-// Real TCP Connection Manager
-class TCPConnectionManager {
-  private connections: Map<string, any> = new Map();
-  private intervals: Map<string, NodeJS.Timeout> = new Map();
-
-  connectToServer(serverConfig: { ip: string; port: number; id: string }, deviceConfig: any) {
-    const serverId = serverConfig.id;
-    
-    // Close existing connection if any
-    this.disconnectFromServer(serverId);
-
-    console.log(`🔄 Connecting to ${serverConfig.ip}:${serverConfig.port}`);
-
-    try {
-      const options = {
-        port: serverConfig.port,
-        host: serverConfig.ip,
-        timeout: 15000,
-        noDelay: true,
-        keepAlive: true,
-      };
-
-      const client = TcpSocket.createConnection(options, () => {
-        console.log(`✅ Connected to ${serverConfig.ip}:${serverConfig.port}`);
-        
-        // Send login packet immediately
-        const loginPacket = buildLoginPacket(deviceConfig);
-        client.write(loginPacket);
-        console.log(`📤 Login sent to ${serverConfig.ip}:${serverConfig.port}`);
-        console.log(`📦 Login Packet: ${loginPacket}`);
-
-        // Send PVT packet every 5 seconds
-        const interval = setInterval(() => {
-          if (!client.destroyed) {
-            const pvtPacket = buildPvtPacket(deviceConfig);
-            client.write(pvtPacket);
-            console.log(`📤 PVT sent to ${serverConfig.ip}:${serverConfig.port}`);
-            console.log(`📦 PVT Packet: ${pvtPacket}`);
-          }
-        }, 5000);
-
-        this.intervals.set(serverId, interval);
-      });
-
-      // Handle incoming data from server
-      client.on('data', (data) => {
-        const receivedData = data.toString();
-        console.log(`📥 Received from ${serverConfig.ip}:${serverConfig.port}:`);
-        console.log(`📨 Data: ${receivedData}`);
-        console.log(`📊 Raw bytes: ${Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-        
-        // Handle specific server responses
-        if (receivedData.includes('LOGIN')) {
-          console.log(`🔐 Login response received`);
-        } else if (receivedData.includes('ACK')) {
-          console.log(`✅ Acknowledgment received`);
-        }
-      });
-
-      // Handle connection close
-      client.on('close', (hadError) => {
-        console.log(`❌ Connection closed: ${serverConfig.ip}:${serverConfig.port} (Error: ${hadError})`);
-        this.cleanup(serverId);
-        this.connections.delete(serverId);
-      });
-
-      // Handle errors
-      client.on('error', (err) => {
-        console.error(`🚨 Error on ${serverConfig.ip}:${serverConfig.port}: ${err.message}`);
-        console.error(`🚨 Error details:`, err);
-        this.cleanup(serverId);
-        this.connections.delete(serverId);
-      });
-
-      // Handle timeout
-      client.on('timeout', () => {
-        console.log(`⏰ Connection timeout: ${serverConfig.ip}:${serverConfig.port}`);
-        client.destroy();
-      });
-
-      // Store the connection
-      this.connections.set(serverId, client);
-
-    } catch (error) {
-      console.error(`🚨 Failed to create connection to ${serverConfig.ip}:${serverConfig.port}:`, error);
-    }
-  }
-
-  disconnectFromServer(serverId: string) {
-    const client = this.connections.get(serverId);
-    if (client && !client.destroyed) {
-      console.log(`🔌 Disconnecting from ${serverId}`);
-      client.destroy();
-    }
-    this.cleanup(serverId);
-    this.connections.delete(serverId);
-  }
-
-  disconnectAll() {
-    console.log(`🛑 Disconnecting all connections`);
-    this.connections.forEach((client, serverId) => {
-      if (!client.destroyed) {
-        client.destroy();
-      }
-      this.cleanup(serverId);
-    });
-    this.connections.clear();
-  }
-
-  private cleanup(serverId: string) {
-    const interval = this.intervals.get(serverId);
-    if (interval) {
-      clearInterval(interval);
-      this.intervals.delete(serverId);
-      console.log(`🧹 Cleaned up interval for ${serverId}`);
-    }
-  }
-
-  getConnectionStatus(): { serverId: string; connected: boolean }[] {
-    const status: { serverId: string; connected: boolean }[] = [];
-    this.connections.forEach((client, serverId) => {
-      status.push({
-        serverId,
-        connected: client && !client.destroyed && client.readyState === 'open'
-      });
-    });
-    return status;
-  }
-
-  // Send custom packet to specific server
-  sendCustomPacket(serverId: string, packet: string) {
-    const client = this.connections.get(serverId);
-    if (client && !client.destroyed) {
-      client.write(packet);
-      console.log(`📤 Custom packet sent to ${serverId}: ${packet}`);
-      return true;
-    }
-    console.log(`❌ Cannot send packet - no connection to ${serverId}`);
-    return false;
-  }
-}
-
-// HTTP-based alternative
+// HTTP Connection Manager
 class HTTPConnectionManager {
   private intervals: Map<string, NodeJS.Timeout> = new Map();
+  private backendUrl = 'https://ais-140-emulator-be.vercel.app/sendpacket';
 
-  async connectToServer(serverConfig: { ip: string; port: number; id: string }, deviceConfig: any) {
-    const serverId = serverConfig.id;
-    const baseUrl = `http://${serverConfig.ip}:${serverConfig.port}`;
-    
-    console.log(`🔄 HTTP connecting to ${baseUrl}`);
+  async sendPacket(packet: string, host: string, port: string, onResponse: (response: PacketResponse) => void) {
+    const timestamp = new Date().toLocaleTimeString();
+    const packetId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      // Send login packet
-      const loginPacket = buildLoginPacket(deviceConfig);
-      const loginResponse = await fetch(`${baseUrl}/login`, {
+      const payload = {
+        packet: packet,
+        PORT: port,
+        HOST: host
+      };
+
+      console.log('📤 Sending packet:', payload);
+
+      const response = await fetch(this.backendUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: loginPacket,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
       });
 
-      console.log(`📤 Login sent via HTTP to ${baseUrl}`);
-      console.log(`📦 Login Packet: ${loginPacket}`);
-      console.log(`📥 Login Response: ${await loginResponse.text()}`);
+      const responseText = await response.text();
+      console.log('📥 Response:', responseText);
 
-      // Send PVT packets every 5 seconds
-      const interval = setInterval(async () => {
-        try {
-          const pvtPacket = buildPvtPacket(deviceConfig);
-          const pvtResponse = await fetch(`${baseUrl}/pvt`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: pvtPacket,
-          });
-
-          console.log(`📤 PVT sent via HTTP to ${baseUrl}`);
-          console.log(`📦 PVT Packet: ${pvtPacket}`);
-          console.log(`📥 PVT Response: ${await pvtResponse.text()}`);
-        } catch (error) {
-          console.error(`🚨 PVT Error:`, error);
-        }
-      }, 5000);
-
-      this.intervals.set(serverId, interval);
+      onResponse({
+        id: packetId,
+        timestamp,
+        packet,
+        host,
+        port,
+        response: responseText || 'Success',
+        status: response.ok ? 'success' : 'error'
+      });
 
     } catch (error) {
-      console.error(`🚨 HTTP Connection Error:`, error);
+      console.error('🚨 Error sending packet:', error);
+      
+      onResponse({
+        id: packetId,
+        timestamp,
+        packet,
+        host,
+        port,
+        response: error instanceof Error ? error.message : 'Unknown error',
+        status: 'error'
+      });
     }
   }
 
-  disconnectFromServer(serverId: string) {
-    const interval = this.intervals.get(serverId);
-    if (interval) {
-      clearInterval(interval);
-      this.intervals.delete(serverId);
-      console.log(`🧹 Cleaned up HTTP interval for ${serverId}`);
-    }
-  }
+  startTransmission(serverConfigs: {ip: string, port: string, id: string}[], deviceConfig: any, onResponse: (response: PacketResponse) => void) {
+    console.log('🚀 Starting HTTP transmission to', serverConfigs.length, 'servers');
 
-  disconnectAll() {
-    console.log(`🛑 Disconnecting all HTTP connections`);
-    this.intervals.forEach((_, serverId) => {
-      this.disconnectFromServer(serverId);
+    // Send initial login packets
+    serverConfigs.forEach(async (serverConfig) => {
+      const loginPacket = buildLoginPacket(deviceConfig);
+      await this.sendPacket(loginPacket, serverConfig.ip, serverConfig.port, onResponse);
     });
+
+    // Set up intervals for PVT packets
+    serverConfigs.forEach((serverConfig) => {
+      const interval = setInterval(async () => {
+        const pvtPacket = buildPvtPacket(deviceConfig);
+        await this.sendPacket(pvtPacket, serverConfig.ip, serverConfig.port, onResponse);
+      }, 5000); // Send every 5 seconds
+
+      this.intervals.set(serverConfig.id, interval);
+    });
+  }
+
+  stopTransmission() {
+    console.log('🛑 Stopping all transmissions...');
+    this.intervals.forEach((interval) => {
+      clearInterval(interval);
+    });
+    this.intervals.clear();
+  }
+
+  isTransmitting(): boolean {
+    return this.intervals.size > 0;
   }
 }
 
 // Main Device Configuration Screen
 const DeviceConfigPage: React.FC = () => {
   const [config, setConfig] = useState<DeviceConfig>({
-    backend: '',
-    ipPortPairs: [{ id: '1', ip: '', port: '' }],
-    deviceImei: '',
-    vendorId: '',
-    vehicleNumber: '',
-    networkProvider: '',
-    firmwareVersion: '',
+    backend: 'development',
+    ipPortPairs: [{ id: '1', ip: '34.225.227.181', port: '5001' }],
+    deviceImei: '866772041471415',
+    vendorId: 'VNDR',
+    vehicleNumber: 'PB01BV2345',
+    networkProvider: 'Airtel',
+    firmwareVersion: 'FIRMWAREVER1.0',
     useGpsCoordinates: true,
     latitude: '',
     longitude: '',
   });
 
-  const [tcpManager] = useState(() => new TCPConnectionManager()); // Real TCP Manager
-  const [httpManager] = useState(() => new HTTPConnectionManager()); // HTTP Manager
+  const [httpManager] = useState(() => new HTTPConnectionManager());
   const [isTransmitting, setIsTransmitting] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<{ serverId: string; connected: boolean }[]>([]);
+  const [packetResponses, setPacketResponses] = useState<PacketResponse[]>([]);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const addIpPortPair = useCallback(() => {
     const newPair: IpPortPair = {
@@ -438,7 +316,6 @@ const DeviceConfigPage: React.FC = () => {
     }));
   }, []);
 
-  // Make sure updateIpPortPair function is correct
   const updateIpPortPair = useCallback((id: string, field: 'ip' | 'port', value: string) => {
     setConfig((prev) => ({
       ...prev,
@@ -458,217 +335,111 @@ const DeviceConfigPage: React.FC = () => {
     }));
   }, []);
 
-  // Fix the validateForm function to return boolean properly
   const validateForm = useCallback((): boolean => {
     if (!config.backend) {
       Alert.alert('Validation Error', 'Please select a backend');
-      console.log('Validation Error', 'Please select a backend');
       return false;
     }
     
     const emptyPairs = config.ipPortPairs.filter(pair => !pair.ip.trim() || !pair.port.trim());
     if (emptyPairs.length > 0) {
       Alert.alert('Validation Error', 'Please fill all IP and Port fields');
-      console.log('Validation Error', 'Please fill all IP and Port fields');
       return false;
     }
 
-    if (!config.deviceImei.trim()) {
-      Alert.alert('Validation Error', 'Please enter device IMEI');
-      console.log('Validation Error', 'Please enter device IMEI');
-      return false;
-    }
-
-    if (config.deviceImei.length !== 15) {
-      Alert.alert('Validation Error', 'IMEI must be 15 digits');
-      console.log('Validation Error', 'IMEI must be 15 digits');
+    if (!config.deviceImei.trim() || config.deviceImei.length !== 15) {
+      Alert.alert('Validation Error', 'Please enter a valid 15-digit IMEI');
       return false;
     }
 
     if (!config.vendorId.trim()) {
       Alert.alert('Validation Error', 'Please enter vendor ID');
-      console.log('Validation Error', 'Please enter vendor ID');
       return false;
     }
 
     if (!config.vehicleNumber.trim()) {
       Alert.alert('Validation Error', 'Please enter vehicle number');
-      console.log('Validation Error', 'Please enter vehicle number');
       return false;
     }
 
     if (!config.networkProvider) {
       Alert.alert('Validation Error', 'Please select network provider');
-      console.log('Validation Error', 'Please select network provider');
       return false;
     }
 
-    if (!config.useGpsCoordinates) {
-      if (!config.latitude.trim() || !config.longitude.trim()) {
-        Alert.alert('Validation Error', 'Please enter latitude and longitude coordinates');
-        console.log('Validation Error', 'Please enter latitude and longitude coordinates');
-        return false;
-      }
+    if (!config.useGpsCoordinates && (!config.latitude.trim() || !config.longitude.trim())) {
+      Alert.alert('Validation Error', 'Please enter latitude and longitude coordinates');
+      return false;
     }
 
     return true;
   }, [config]);
 
-  // Fixed handleStartTransmission function
+  const handlePacketResponse = useCallback((response: PacketResponse) => {
+    setPacketResponses(prev => [...prev, response]);
+    // Auto-scroll to bottom
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, []);
+
   const handleStartTransmission = useCallback(() => {
-    console.log('🚀 Starting REAL TCP transmission');
+    console.log('🚀 Starting HTTP transmission');
     
-    const isValid = validateForm();
-    if (!isValid) {
-      console.log('❌ Form validation failed');
+    if (!validateForm()) {
       return;
     }
 
     try {
       setIsTransmitting(true);
+      setPacketResponses([]); // Clear previous responses
 
-      // Prepare device config
       const deviceConfig = {
-        vendorId: config.vendorId?.trim() || 'DEFAULT_VENDOR',
+        vendorId: config.vendorId?.trim() || 'VNDR',
         firmwareVersion: config.firmwareVersion?.trim() || 'FIRMWAREVER1.0',
         deviceImei: config.deviceImei?.trim() || '',
         vehicleNumber: config.vehicleNumber?.trim() || '',
-        networkProvider: config.networkProvider || 'AIRTEL',
-        latitude: config.useGpsCoordinates ? '30.101455' : (config.latitude?.trim() || '0.0'),
-        longitude: config.useGpsCoordinates ? '78.289948' : (config.longitude?.trim() || '0.0')
+        networkProvider: config.networkProvider?.toUpperCase() || 'AIRTEL',
+        latitude: config.useGpsCoordinates ? '31.589618' : (config.latitude?.trim() || '31.589618'),
+        longitude: config.useGpsCoordinates ? '75.875231' : (config.longitude?.trim() || '75.875231')
       };
 
-      console.log('🚀 Starting REAL TCP connections...');
-      console.log('📋 Device Config:', JSON.stringify(deviceConfig, null, 2));
-
-      // Get valid server pairs
       const validPairs = config.ipPortPairs.filter(pair => 
         pair.ip?.trim() && pair.port?.trim()
       );
 
-      if (validPairs.length === 0) {
-        Alert.alert('Error', 'No valid IP/Port pairs found');
-        setIsTransmitting(false);
-        return;
-      }
+      const serverConfigs = validPairs.map((pair, index) => ({
+        ip: pair.ip.trim(),
+        port: pair.port.trim(),
+        id: `server_${index + 1}`
+      }));
 
-      // Connect to all servers
-      validPairs.forEach((pair, index) => {
-        const serverConfig = {
-          ip: pair.ip.trim(),
-          port: parseInt(pair.port.trim(), 10),
-          id: `server_${index + 1}`
-        };
-        
-        console.log(`🔗 Connecting to REAL server ${index + 1}:`, serverConfig);
-        tcpManager.connectToServer(serverConfig, deviceConfig);
-      });
-
-      // Update connection status every 2 seconds
-      const statusInterval = setInterval(() => {
-        const status = tcpManager.getConnectionStatus();
-        setConnectionStatus(status);
-        console.log('📊 Connection Status Update:', status);
-      }, 2000);
-
-      // Clear status interval when stopping transmission
-      setTimeout(() => clearInterval(statusInterval), 300000); // 5 minutes max
+      httpManager.startTransmission(serverConfigs, deviceConfig, handlePacketResponse);
 
       Alert.alert(
-        '🌐 Real TCP Transmission Started',
-        `📡 Connecting to ${validPairs.length} server(s)\n\n🔍 Check console for live data`,
-        [
-          {
-            text: 'View Status',
-            onPress: () => {
-              const status = tcpManager.getConnectionStatus();
-              console.log('📊 Current Status:', status);
-              Alert.alert(
-                'Connection Status',
-                status.map(s => `${s.serverId}: ${s.connected ? '✅ Connected' : '❌ Disconnected'}`).join('\n')
-              );
-            }
-          },
-          { text: 'OK' }
-        ]
+        '✅ Transmission Started',
+        `📡 Sending packets to ${validPairs.length} server(s)\n\n📊 View responses below`
       );
 
     } catch (error) {
-      console.error('🚨 Error in real TCP transmission:', error);
+      console.error('🚨 Error starting transmission:', error);
       setIsTransmitting(false);
-      Alert.alert('Error', `Failed to start TCP transmission: ${error}`);
+      Alert.alert('Error', `Failed to start transmission: ${error}`);
     }
-  }, [config, tcpManager, validateForm]);
+  }, [config, httpManager, validateForm, handlePacketResponse]);
 
-  // Fixed handleStopTransmission function
   const handleStopTransmission = useCallback(() => {
-    console.log('🛑 Stop transmission clicked');
+    console.log('🛑 Stopping transmission');
     
     try {
-      console.log('🛑 Stopping all transmissions...');
-      tcpManager.disconnectAll();
+      httpManager.stopTransmission();
       setIsTransmitting(false);
-      
-      Alert.alert('Transmission Stopped', '📡 All connections closed');
-      console.log('✅ All transmissions stopped');
+      Alert.alert('✅ Transmission Stopped', '📡 All packet sending stopped');
     } catch (error) {
       console.error('🚨 Error stopping transmission:', error);
       Alert.alert('Error', `Failed to stop transmission: ${error}`);
     }
-  }, [tcpManager]);
-
-  // Fixed handleSave function
-  const handleSave = useCallback(() => {
-    console.log('💾 Save button clicked');
-    
-    if (!validateForm()) {
-      console.log('❌ Save validation failed');
-      return;
-    }
-
-    try {
-      // Generate packets for preview
-      const pvtInputData = {
-        vendorId: config.vendorId?.trim() || 'DEFAULT_VENDOR',
-        firmwareVersion: config.firmwareVersion?.trim() || 'FIRMWAREVER1.0',
-        deviceImei: config.deviceImei?.trim() || '',
-        vehicleNumber: config.vehicleNumber?.trim() || '',
-        networkProvider: config.networkProvider || 'AIRTEL',
-        latitude: config.useGpsCoordinates ? '30.101455' : (config.latitude?.trim() || '0.0'),
-        longitude: config.useGpsCoordinates ? '78.289948' : (config.longitude?.trim() || '0.0')
-      };
-
-      const loginPacket = buildLoginPacket(pvtInputData);
-      const pvtPacket = buildPvtPacket(pvtInputData);
-
-      console.log('='.repeat(60));
-      console.log('🔐 GENERATED LOGIN PACKET:');
-      console.log(loginPacket);
-      console.log('='.repeat(60));
-      console.log('📡 GENERATED PVT PACKET:');
-      console.log(pvtPacket);
-      console.log('='.repeat(60));
-      
-      Alert.alert(
-        'Configuration Saved',
-        '✅ Ready for transmission!\n\n📦 Packets generated successfully',
-        [
-          { 
-            text: 'Start Transmission', 
-            onPress: () => {
-              console.log('🚀 Starting transmission from save dialog');
-              handleStartTransmission();
-            }
-          },
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
-
-    } catch (error) {
-      console.error('🚨 Error in handleSave:', error);
-      Alert.alert('Error', `Failed to save configuration: ${error}`);
-    }
-  }, [config, handleStartTransmission, validateForm]);
+  }, [httpManager]);
 
   const handleReset = useCallback(() => {
     Alert.alert(
@@ -680,6 +451,9 @@ const DeviceConfigPage: React.FC = () => {
           text: 'Reset',
           style: 'destructive',
           onPress: () => {
+            if (isTransmitting) {
+              handleStopTransmission();
+            }
             setConfig({
               backend: '',
               ipPortPairs: [{ id: '1', ip: '', port: '' }],
@@ -692,10 +466,15 @@ const DeviceConfigPage: React.FC = () => {
               latitude: '',
               longitude: '',
             });
+            setPacketResponses([]);
           }
         }
       ]
     );
+  }, [isTransmitting, handleStopTransmission]);
+
+  const clearResponses = useCallback(() => {
+    setPacketResponses([]);
   }, []);
 
   return (
@@ -738,10 +517,7 @@ const DeviceConfigPage: React.FC = () => {
                 dropdownIconColor="#666"
               >
                 <Picker.Item label="Choose backend server..." value="" />
-                <Picker.Item label="Production Server" value="production" />
-                <Picker.Item label="Staging Server" value="staging" />
-                <Picker.Item label="Development Server" value="development" />
-                <Picker.Item label="Testing Server" value="testing" />
+                <Picker.Item label="AIS140" value="production" />
               </Picker>
             </View>
           </View>
@@ -769,8 +545,8 @@ const DeviceConfigPage: React.FC = () => {
               key={pair.id}
               pair={pair}
               index={index}
-              onIpChange={(id: string, value: string) => updateIpPortPair(id, 'ip', value)} // Fixed
-              onPortChange={(id: string, value: string) => updateIpPortPair(id, 'port', value)} // Fixed
+              onIpChange={(id: string, value: string) => updateIpPortPair(id, 'ip', value)}
+              onPortChange={(id: string, value: string) => updateIpPortPair(id, 'port', value)}
               onRemove={removeIpPortPair}
               canRemove={config.ipPortPairs.length > 1}
             />
@@ -816,7 +592,7 @@ const DeviceConfigPage: React.FC = () => {
             <Text style={styles.label}>Vehicle Number *</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g., MH-12-AB-1234"
+              placeholder="e.g., PB01BV2345"
               value={config.vehicleNumber}
               onChangeText={(value) => updateConfig('vehicleNumber', value.toUpperCase())}
               placeholderTextColor="#999"
@@ -848,7 +624,7 @@ const DeviceConfigPage: React.FC = () => {
             <Text style={styles.label}>Firmware Version</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g., v2.1.3"
+              placeholder="e.g., FIRMWAREVER1.0"
               value={config.firmwareVersion}
               onChangeText={(value) => updateConfig('firmwareVersion', value)}
               placeholderTextColor="#999"
@@ -867,11 +643,11 @@ const DeviceConfigPage: React.FC = () => {
           
           <View style={styles.switchContainer}>
             <View style={styles.switchInfo}>
-              <Text style={styles.switchLabel}>Use GPS coordinates from this device</Text>
+              <Text style={styles.switchLabel}>Use default GPS coordinates</Text>
               <Text style={styles.switchDescription}>
                 {config.useGpsCoordinates 
-                  ? 'Device will automatically get coordinates from GPS' 
-                  : 'You need to manually enter coordinates'
+                  ? 'Using: 31.589618, 75.875231' 
+                  : 'Manual coordinates entered'
                 }
               </Text>
             </View>
@@ -891,7 +667,7 @@ const DeviceConfigPage: React.FC = () => {
                   <Text style={styles.label}>Latitude *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="19.0760"
+                    placeholder="31.589618"
                     value={config.latitude}
                     onChangeText={(value) => updateConfig('latitude', value)}
                     keyboardType="numeric"
@@ -904,7 +680,7 @@ const DeviceConfigPage: React.FC = () => {
                   <Text style={styles.label}>Longitude *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="72.8777"
+                    placeholder="75.875231"
                     value={config.longitude}
                     onChangeText={(value) => updateConfig('longitude', value)}
                     keyboardType="numeric"
@@ -920,31 +696,56 @@ const DeviceConfigPage: React.FC = () => {
             </View>
           )}
         </View>
-
-        {/* Connection Status */}
-        {isTransmitting && (
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusTitle}>🌐 Live Connection Status:</Text>
-            {connectionStatus.map(status => (
-              <Text key={status.serverId} style={styles.statusText}>
-                {status.serverId}: {status.connected ? '✅ Connected' : '❌ Disconnected'}
-              </Text>
-            ))}
-          </View>
-        )}
       </ScrollView>
+
+      {/* Packet Responses Display */}
+      {packetResponses.length > 0 && (
+        <View style={styles.responsesContainer}>
+          <View style={styles.responsesHeader}>
+            <Text style={styles.responsesTitle}>
+              📡 Packet Responses ({packetResponses.length})
+            </Text>
+            <TouchableOpacity onPress={clearResponses} style={styles.clearButton}>
+              <Icon name="clear-all" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.responsesScroll}
+            showsVerticalScrollIndicator={true}
+          >
+            {packetResponses.map((item) => (
+              <View key={item.id} style={[
+                styles.responseItem,
+                item.status === 'error' && styles.responseItemError
+              ]}>
+                <View style={styles.responseHeader}>
+                  <Text style={styles.responseTime}>{item.timestamp}</Text>
+                  <Text style={styles.responseServer}>{item.host}:{item.port}</Text>
+                  <View style={[
+                    styles.statusBadge,
+                    item.status === 'success' ? styles.statusSuccess : styles.statusError
+                  ]}>
+                    <Text style={styles.statusText}>
+                      {item.status === 'success' ? '✅' : '❌'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.packetLabel}>📤 Packet:</Text>
+                <Text style={styles.packetText} selectable>{item.packet}</Text>
+                <Text style={styles.responseLabel}>📥 Response:</Text>
+                <Text style={[
+                  styles.responseText,
+                  item.status === 'error' && styles.responseTextError
+                ]} selectable>{item.response}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Bottom Action Bar */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.saveButton]} 
-          onPress={handleSave}
-          activeOpacity={0.9}
-        >
-          <Icon name="save" size={20} color="#fff" />
-          <Text style={styles.saveButtonText}>Save Config</Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity 
           style={[
             styles.actionButton, 
@@ -1047,15 +848,29 @@ interface Styles {
   addButton: ViewStyle;
   addButtonText: TextStyle;
   bottomBar: ViewStyle;
-  saveButton: ViewStyle;
-  saveButtonText: TextStyle;
   actionButton: ViewStyle;
   transmitButton: ViewStyle;
   stopButton: ViewStyle;
   transmitButtonText: TextStyle;
-  statusContainer: ViewStyle;
-  statusTitle: TextStyle;
+  responsesContainer: ViewStyle;
+  responsesHeader: ViewStyle;
+  responsesTitle: TextStyle;
+  clearButton: ViewStyle;
+  responsesScroll: ViewStyle;
+  responseItem: ViewStyle;
+  responseItemError: ViewStyle;
+  responseHeader: ViewStyle;
+  responseTime: TextStyle;
+  responseServer: TextStyle;
+  statusBadge: ViewStyle;
+  statusSuccess: ViewStyle;
+  statusError: ViewStyle;
   statusText: TextStyle;
+  packetLabel: TextStyle;
+  packetText: TextStyle;
+  responseLabel: TextStyle;
+  responseText: TextStyle;
+  responseTextError: TextStyle;
 }
 
 const styles = StyleSheet.create<Styles>({
@@ -1222,7 +1037,6 @@ const styles = StyleSheet.create<Styles>({
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    gap: 8,
   },
   actionButton: {
     flex: 1,
@@ -1236,24 +1050,12 @@ const styles = StyleSheet.create<Styles>({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    marginHorizontal: 4,
-  },
-  saveButton: {
-    backgroundColor: '#4CAF50',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
   },
   transmitButton: {
-    backgroundColor: '#FF9800',
-    flex: 2,
+    backgroundColor: '#4CAF50',
   },
   stopButton: {
     backgroundColor: '#F44336',
-    flex: 2,
   },
   transmitButtonText: {
     color: '#fff',
@@ -1261,25 +1063,107 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '600',
     marginLeft: 8,
   },
-  statusContainer: {
-    backgroundColor: '#F8F9FA',
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#28A745',
+  responsesContainer: {
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#E9ECEF',
+    maxHeight: 300,
   },
-  statusTitle: {
+  responsesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  responsesTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#495057',
+    color: '#333',
+  },
+  clearButton: {
+    padding: 4,
+    borderRadius: 4,
+  },
+  responsesScroll: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  responseItem: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  responseItemError: {
+    borderLeftColor: '#F44336',
+    backgroundColor: '#FFF5F5',
+  },
+  responseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
+  responseTime: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  responseServer: {
+    fontSize: 12,
+    color: '#666',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusSuccess: {
+    backgroundColor: '#E8F5E8',
+  },
+  statusError: {
+    backgroundColor: '#FFEBEE',
+  },
   statusText: {
-    fontSize: 14,
-    color: '#6C757D',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  packetLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#555',
     marginBottom: 4,
+  },
+  packetText: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: '#333',
+    backgroundColor: '#fff',
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  responseLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 4,
+  },
+  responseText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
+    backgroundColor: '#fff',
+    padding: 8,
+    borderRadius: 4,
+  },
+  responseTextError: {
+    color: '#F44336',
   },
 });
 
