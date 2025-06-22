@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    Dimensions,
-    SafeAreaView,
-    ScrollView,
-    Share,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Animated,
+  Dimensions,
+  SafeAreaView,
+  ScrollView,
+  Share,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -165,7 +165,7 @@ class HTTPConnectionManager {
       '1',
       'L',
       input.deviceImei,
-      (input.vehicleNumber || '').replace(/[^A-Z0-9]/gi, '').padStart(16, '0'),
+      (input.vehicleNumber || '').replace(/[^A-Z0-9]/gi, ''),
       '1',
       dateStr,
       timeStr,
