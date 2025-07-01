@@ -278,6 +278,19 @@ class HTTPConnectionManager {
   }
 }
 
+
+const BACKEND_CONFIGS = {
+  'gujrat-mining': {
+    label: 'Gujrat Mining',
+    servers: [{ ip: '34.225.227.181', port: '5001' }]
+  },
+  'production': {
+    label: 'Production',
+    servers: [{ ip: '', port: '' }]
+  }
+  // Add more backends here as needed
+};
+
 // Main Device Configuration Screen
 const DeviceConfigPage: React.FC = () => {
   const [config, setConfig] = useState<DeviceConfig>({
@@ -333,10 +346,20 @@ const DeviceConfigPage: React.FC = () => {
     field: K,
     value: DeviceConfig[K]
   ) => {
-    setConfig((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setConfig((prev) => {
+      let newConfig = { ...prev, [field]: value };
+      if (field === 'backend' && value && typeof value === 'string') {
+        const backend = BACKEND_CONFIGS[value];
+        if (backend && backend.servers.length > 0) {
+          newConfig.ipPortPairs = backend.servers.map((s, i) => ({
+            id: (Date.now() + i).toString(),
+            ip: s.ip,
+            port: s.port
+          }));
+        }
+      }
+      return newConfig;
+    });
   }, []);
 
   const validateForm = useCallback((): boolean => {
@@ -493,7 +516,9 @@ const DeviceConfigPage: React.FC = () => {
                 dropdownIconColor="#666"
               >
                 <Picker.Item label="Choose backend server..." value="" />
-                <Picker.Item label="AIS140" value="production" />
+                {Object.entries(BACKEND_CONFIGS).map(([key, val]) => (
+                  <Picker.Item key={key} label={val.label} value={key} />
+                ))}
               </Picker>
             </View>
           </View>
